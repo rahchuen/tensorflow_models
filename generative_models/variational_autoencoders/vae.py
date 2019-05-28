@@ -13,8 +13,8 @@ from tensorflow.examples.tutorials.mnist import input_data
 
 
 def compose_funcs(*args):
-    """Util for multiple function composition
-    i.e. composed = composeAll([f, g, h])
+    """Multiple function composition
+    i.e. composed = compose_funcs([f, g, h])
          composed(x) == f(g(h(x)))
     """
     return partial(functools.reduce, compose)(*args)
@@ -37,6 +37,8 @@ class VariationalAutoEncoder(object):
         tf.reset_default_graph()
         self.input = tf.placeholder(tf.float32, [None, 784])
         self._build_graph()
+
+        self.tf_saver = tf.train.Saver()
 
         # Launch the session
         self.sess = tf.InteractiveSession()
@@ -120,11 +122,36 @@ class VariationalAutoEncoder(object):
         # z is sampled from prior z~N(0,1)
         if z is None:
             z = tf.np.random.normal(size=self.architecture[-1])
-        return self.sess.run(self.x_recons,
-                             feed_dict={self.z: z})
+        return self.sess.run(self.x_recons, feed_dict={self.z: z})
 
     def reconstruct(self, X):
         # Reconstruct using given mini batch of data
-        return self.sess.run(self.x_recons,
-                             feed_dict={self.input: X})
+        return self.sess.run(self.x_recons, feed_dict={self.input: X})
+
+    def save(self, check_point_file ='vae_model.ckpt'):
+        save_path = self.tf_saver.save(self.sess, check_point_file)
+        print("saved weights to " + save_path)
+
+    def load(self, check_point_file='vae_model.ckpt'):
+        self.tf_saver.restore(self.sess, check_point_file)
+        print("loaded weights from " + check_point_file)
+
+
+def train(architecture, dropout, activation, initialization, learning_rate, num_epochs):
+    vae = VariationalAutoEncoder(architecture, dropout, activation, initialization, learning_rate)
+    mnist = input_data.read_data_sets('./data/MNIST_data')
+
+    for epoch in range(num_epochs):
+        total_batch = int(55000 / 1000)
+        for i in range(total_batch):
+            batch_xs, _ = mnist.train.next_batch(1000)
+            cost, z_code = vae.train_one_step(batch_xs)
+
+        if epoch % 10 == 0:
+            print('Epoch', epoch, 'cost', cost)
+            samples = vae.generate_sample(z_code)
+            plt.subplot(122)
+            curr_img = samples[0].reshape(28, 28)
+            plt.imshow(curr_img, cmap='gray')
+            plt.show()
 
