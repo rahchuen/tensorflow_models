@@ -50,6 +50,7 @@ class VariationalAutoEncoder(object):
         self.optimizer = tf.train.AdamOptimizer(self.learning_rate).minimize(self.loss)
 
     def _encoder(self, x):
+        # probabilistic encoder: q(z|x)
         with tf.variable_scope("Encoder"):
             encoding = [Dense(units, activation=self.activation, kernel_initializer=self.initialization)
                         for units in reversed(self.architecture[1:-1])]
@@ -61,6 +62,7 @@ class VariationalAutoEncoder(object):
         return z_mu, z_log_var
 
     def _decoder(self, z):
+        # probabilistic decoder: p(x|z)
         with tf.variable_scope("Decoder"):
             decoding = [Dense(units, activation=activation, kernel_initializer=initialization)
                         for units in architecture[1:-1]]
@@ -70,9 +72,10 @@ class VariationalAutoEncoder(object):
 
     @staticmethod
     def _reparametrize(mu, log_var):
+        # z = z_mean + z_sigma * e, where e~N(0,1)
         with tf.variable_scope("Reparametrization Trick"):
             esp = tf.random.normal(tf.shape(log_var), mean=0, stddev=1.0)
-            z = tf.add(mu, (tf.exp(log_var / 2) * esp))
+            z = tf.add(mu, tf.mul(tf.exp(log_var / 2), esp))
             tf.summary.histogram('z_sampled', z)
         return z
 
@@ -103,6 +106,7 @@ class VariationalAutoEncoder(object):
         return vae_loss
 
     def train_one_step(self, X):
+        # train one mini batch
         summary_writer = tf.summary.FileWriter('/home/rachel/vae/logs', self.sess.graph)
         merge = tf.summary.merge_all()
         summary, train_op, cost, z = self.sess.run(
@@ -112,13 +116,15 @@ class VariationalAutoEncoder(object):
         return cost, z
 
     def generate_sample(self, z):
-        """
-        Generate reconstructed x_hat from z. If z is not given,
-        z is sampled from prior z~N(0,1).
-        """
+        # Generate reconstructed x_hat from z. If z is not given,
+        # z is sampled from prior z~N(0,1)
         if z is None:
             z = tf.np.random.normal(size=self.architecture[-1])
         return self.sess.run(self.x_recons,
                              feed_dict={self.z: z})
 
-    
+    def reconstruct(self, X):
+        # Reconstruct using given mini batch of data
+        return self.sess.run(self.x_recons,
+                             feed_dict={self.input: X})
+
